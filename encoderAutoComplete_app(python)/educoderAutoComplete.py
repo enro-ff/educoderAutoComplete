@@ -5,7 +5,53 @@ import json
 from openai import OpenAI
 import pyautogui
 import time
+import ctypes
+from ctypes import wintypes
 import os
+
+class InputMethodSwitcher:
+    def __init__(self):
+        self.user32 = ctypes.WinDLL('user32')
+        self.WM_INPUTLANGCHANGEREQUEST = 0x0050
+        
+    def get_current_input_method(self):
+        """获取当前输入法"""
+        hwnd = self.user32.GetForegroundWindow()
+        thread_id = self.user32.GetWindowThreadProcessId(hwnd, None)
+        hkl = self.user32.GetKeyboardLayout(thread_id)
+        return hkl
+    
+    def list_available_input_methods(self):
+        """列出所有可用的输入法"""
+        layout_count = self.user32.GetKeyboardLayoutList(0, None)
+        layout_list = (wintypes.HANDLE * layout_count)()
+        self.user32.GetKeyboardLayoutList(layout_count, layout_list)
+        
+        input_methods = []
+        for layout in layout_list:
+            lang_id = layout & 0xFFFF
+            input_methods.append({
+                'handle': layout,
+                'lang_id': lang_id,
+                'is_english': lang_id == 0x0409
+            })
+        return input_methods
+    
+    def switch_to_english(self):
+        """切换到英文输入法"""
+        input_methods = self.list_available_input_methods()
+        english_methods = [im for im in input_methods if im['is_english']]
+        
+        if not english_methods:
+            return False
+        
+        # 使用第一个找到的英文输入法
+        english_layout = english_methods[0]['handle']
+        hwnd = self.user32.GetForegroundWindow()
+        
+        # 激活输入法
+        result = self.user32.ActivateKeyboardLayout(english_layout, 0)
+        return result != 0
 
 
 # 配置日志
@@ -14,9 +60,9 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-# DeepSeek API 配置
-  # 请替换为你的实际API密钥
-DEEPSEEK_API_KEY = "your_deepseek_api_key_here"
+#DeepSeek API 配置
+#替换为实际API密钥
+DEEPSEEK_API_KEY = "sk-f184e296fd3a485181874f0613fd5d44"
 
 if(os.path.exists("cache.txt")):
     with open("cache.txt", "r", encoding="utf-8") as f:
@@ -53,10 +99,10 @@ class EducoderAssistant:
 {question_text}
 
 要求：
-1. 代码应完整且可运行包含头文件，主函数必须int main()形式
+1. 代码应完整且可运行,包含头文件,主函数必须int main()形式
 2. 只返回代码，不要有任何额外的文字说明
 3. 使用标准库和常见的编程实践
-4. 所有的代码都是c语言
+4. 所有的代码都是C语言
 
 
 
@@ -130,6 +176,26 @@ class EducoderAssistant:
             pyautogui.hotkey('ctrl', 'a')
             time.sleep(0.1)
             pyautogui.hotkey('delete')
+            time.sleep(0.5)
+            #切换至英文输入法
+            switcher = InputMethodSwitcher()
+
+            # 获取当前输入法
+            current = switcher.get_current_input_method()
+            print(f"当前输入法: {hex(current)}")
+
+            # 列出所有输入法
+            methods = switcher.list_available_input_methods()
+            for method in methods:
+               status = "英文" if method['is_english'] else "其他"
+               print(f"输入法: {hex(method['handle'])} - {status}")
+
+            # 切换到英文
+            if switcher.switch_to_english():
+                print("成功切换到英文输入法")
+            else:
+              print("切换英文输入法失败")
+
             # 分段输入，避免一次性输入过长文本
             lines = text.split('\n')
             for i, line in enumerate(lines):
