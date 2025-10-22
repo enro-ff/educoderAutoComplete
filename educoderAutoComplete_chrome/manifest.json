@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Educoder 自动化助手",
+  "version": "1.0.0",
+  "description": "自动获取Educoder题目并生成代码解决方案",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://www.educoder.net/tasks/*",
+    "https://www.educoder.net/shixuns/*"
+  ],
+  "action": {
+    "default_title": "Educoder助手"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.educoder.net/tasks/*",
+        "https://www.educoder.net/shixuns/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "web_accessible_resources": [{
+    "resources": ["content.css"],
+    "matches": ["https://www.educoder.net/*"]
+  }]
+}
