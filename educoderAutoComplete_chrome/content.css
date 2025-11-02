@@ -14,21 +14,21 @@
     resize: both;
     overflow: hidden;
     min-width: 350px;
-    min-height: 500px;
+    min-height: 52px;
 }
 
-.educoder-assistant.ea-visible {
-    display: flex;
-    flex-direction: column;
-}
+    .educoder-assistant.ea-visible {
+        display: flex;
+        flex-direction: column;
+    }
 
-.educoder-assistant.ea-minimized-state .ea-body {
-    display: none;
-}
+    .educoder-assistant.ea-minimized-state .ea-body {
+        display: none;
+    }
 
-.educoder-assistant.ea-minimized-state .ea-minimized {
-    display: flex;
-}
+    .educoder-assistant.ea-minimized-state .ea-minimized {
+        display: flex;
+    }
 
 /* 头部样式 */
 .ea-header {
@@ -41,6 +41,7 @@
     cursor: move;
     user-select: none;
     border-radius: 12px 12px 0 0;
+    line-height: 1;
 }
 
 .ea-title {
@@ -53,6 +54,11 @@
 
 .ea-icon {
     font-size: 16px;
+}
+
+.fast-show {
+    font-size: 10px;
+    color: #bbbbbb
 }
 
 .ea-controls {
@@ -75,9 +81,9 @@
     transition: background 0.2s;
 }
 
-.ea-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-}
+    .ea-btn:hover {
+        background: rgba(255, 255, 255, 0.3);
+    }
 
 /* 主体内容 */
 .ea-body {
@@ -86,23 +92,36 @@
     flex-direction: column;
     overflow: hidden;
     padding: 0;
+    overflow-y: auto;
+}
+
+/* 提示内容 */
+.ea-alert {
+    padding-left: 15px;
+    padding-right: 15px;
+    padding-top: 15px;
+    color: #333
 }
 
 .ea-section {
-    padding: 16px;
-    border-bottom: 1px solid #f0f0f0;
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-top: 16px;
+    border-bottom: 0px solid #f0f0f0;
 }
 
-.ea-section:last-child {
-    border-bottom: none;
-}
+    .ea-section:last-child {
+        border-bottom: none;
+    }
 
-.ea-section h4 {
-    margin: 0 0 12px 0;
-    font-size: 13px;
-    font-weight: 600;
-    color: #333;
-}
+    .ea-section h4 {
+        margin: 0 0 12px 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: #333;
+    }
+
+
 
 /* 状态区域 */
 .ea-status {
@@ -119,14 +138,14 @@
     font-size: 12px;
 }
 
-.ea-status-item:last-child {
-    margin-bottom: 0;
-}
+    .ea-status-item:last-child {
+        margin-bottom: 0;
+    }
 
-.ea-status-item span:first-child {
-    color: #666;
-    min-width: 40px;
-}
+    .ea-status-item span:first-child {
+        color: #666;
+        min-width: 40px;
+    }
 
 .ea-status-value {
     font-weight: 500;
@@ -140,19 +159,27 @@
     background: #dc3545;
 }
 
-.ea-status-indicator.ea-connected {
-    background: #28a745;
-    animation: ea-pulse 2s infinite;
-}
+    .ea-status-indicator.ea-connected {
+        background: #28a745;
+        animation: ea-pulse 2s infinite;
+    }
 
-.ea-status-indicator.ea-connecting {
-    background: #ffc107;
-}
+    .ea-status-indicator.ea-connecting {
+        background: #ffc107;
+    }
 
 @keyframes ea-pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
+    0% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+
+    100% {
+        opacity: 1;
+    }
 }
 
 /* 输入和按钮 */
@@ -160,13 +187,13 @@
     margin-bottom: 12px;
 }
 
-.ea-input-group label {
-    display: block;
-    font-size: 12px;
-    font-weight: 500;
-    margin-bottom: 4px;
-    color: #333;
-}
+    .ea-input-group label {
+        display: block;
+        font-size: 12px;
+        font-weight: 500;
+        margin-bottom: 4px;
+        color: #333;
+    }
 
 .ea-input {
     width: 100%;
@@ -177,11 +204,11 @@
     box-sizing: border-box;
 }
 
-.ea-input:focus {
-    outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
-}
+    .ea-input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+    }
 
 .ea-button-group {
     display: flex;
@@ -199,9 +226,9 @@
     flex: 1;
 }
 
-.ea-primary:hover:not(:disabled) {
-    background: #5a6fd8;
-}
+    .ea-primary:hover:not(:disabled) {
+        background: #5a6fd8;
+    }
 
 .ea-secondary {
     background: #6c757d;
@@ -214,9 +241,9 @@
     flex: 1;
 }
 
-.ea-secondary:hover:not(:disabled) {
-    background: #5a6268;
-}
+    .ea-secondary:hover:not(:disabled) {
+        background: #5a6268;
+    }
 
 .ea-success {
     background: #28a745;
@@ -229,9 +256,9 @@
     flex: 1;
 }
 
-.ea-success:hover:not(:disabled) {
-    background: #218838;
-}
+    .ea-success:hover:not(:disabled) {
+        background: #218838;
+    }
 
 .ea-btn:disabled {
     background: #ccc;
@@ -256,9 +283,9 @@
     overflow: hidden;
 }
 
-.ea-preview:last-child {
-    margin-bottom: 0;
-}
+    .ea-preview:last-child {
+        margin-bottom: 0;
+    }
 
 .ea-preview-header {
     background: #f8f9fa;
@@ -342,30 +369,30 @@
     border-left: 3px solid #ccc;
 }
 
-.ea-log-item.ea-sent {
-    background: #e3f2fd;
-    border-left-color: #2196f3;
-}
+    .ea-log-item.ea-sent {
+        background: #e3f2fd;
+        border-left-color: #2196f3;
+    }
 
-.ea-log-item.ea-received {
-    background: #e8f5e8;
-    border-left-color: #4caf50;
-}
+    .ea-log-item.ea-received {
+        background: #e8f5e8;
+        border-left-color: #4caf50;
+    }
 
-.ea-log-item.ea-system {
-    background: #fff3e0;
-    border-left-color: #ff9800;
-}
+    .ea-log-item.ea-system {
+        background: #fff3e0;
+        border-left-color: #ff9800;
+    }
 
-.ea-log-item.ea-error {
-    background: #ffebee;
-    border-left-color: #f44336;
-}
+    .ea-log-item.ea-error {
+        background: #ffebee;
+        border-left-color: #f44336;
+    }
 
-.ea-log-item.ea-warning {
-    background: #fff3cd;
-    border-left-color: #ffc107;
-}
+    .ea-log-item.ea-warning {
+        background: #fff3cd;
+        border-left-color: #ffc107;
+    }
 
 .ea-log-time {
     font-size: 9px;
@@ -391,10 +418,7 @@
     border-radius: 12px;
 }
 
-.ea-restore {
-    margin-left: auto;
-    background: rgba(255, 255, 255, 0.2);
-}
+
 
 /* 滚动条 */
 .ea-preview-content::-webkit-scrollbar,
@@ -413,10 +437,10 @@
     border-radius: 2px;
 }
 
-.ea-preview-content::-webkit-scrollbar-thumb:hover,
-.ea-log-container::-webkit-scrollbar-thumb:hover {
-    background: #a8a8a8;
-}
+    .ea-preview-content::-webkit-scrollbar-thumb:hover,
+    .ea-log-container::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
 
 .ea-code-preview::-webkit-scrollbar-track {
     background: #2d2d2d;
