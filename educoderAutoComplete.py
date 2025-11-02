@@ -2,57 +2,59 @@ import asyncio
 import websockets
 import logging
 import json
-from openai import OpenAI
+from openai import AsyncOpenAI
 import pyautogui
 import time
-import ctypes
-from ctypes import wintypes
 import os
+import win32api
+import win32gui
+from win32con import WM_INPUTLANGCHANGEREQUEST
 
-class InputMethodSwitcher:
-    def __init__(self):
-        self.user32 = ctypes.WinDLL('user32')
-        self.WM_INPUTLANGCHANGEREQUEST = 0x0050
-        
-    def get_current_input_method(self):
-        """获取当前输入法"""
-        hwnd = self.user32.GetForegroundWindow()
-        thread_id = self.user32.GetWindowThreadProcessId(hwnd, None)
-        hkl = self.user32.GetKeyboardLayout(thread_id)
-        return hkl
-    
-    def list_available_input_methods(self):
-        """列出所有可用的输入法"""
-        layout_count = self.user32.GetKeyboardLayoutList(0, None)
-        layout_list = (wintypes.HANDLE * layout_count)()
-        self.user32.GetKeyboardLayoutList(layout_count, layout_list)
-        
-        input_methods = []
-        for layout in layout_list:
-            lang_id = layout & 0xFFFF
-            input_methods.append({
-                'handle': layout,
-                'lang_id': lang_id,
-                'is_english': lang_id == 0x0409
-            })
-        return input_methods
-    
-    def switch_to_english(self):
-        """切换到英文输入法"""
-        input_methods = self.list_available_input_methods()
-        english_methods = [im for im in input_methods if im['is_english']]
-        
-        if not english_methods:
-            return False
-        
-        # 使用第一个找到的英文输入法
-        english_layout = english_methods[0]['handle']
-        hwnd = self.user32.GetForegroundWindow()
-        
-        # 激活输入法
-        result = self.user32.ActivateKeyboardLayout(english_layout, 0)
-        return result != 0
+# 输入法相关函数
+def get_language():
+    """获取当前输入法状态"""
+    hwnd = win32gui.GetForegroundWindow()
+    thread_id = win32api.GetWindowLong(hwnd, 0)
+    klid = win32api.GetKeyboardLayout(thread_id)
+    lid = klid & (2 ** 16 - 1)
+    lid_hex = hex(lid)
+    print(lid_hex)
+    if lid_hex == '0x409':
+        print('当前的输入法状态是英文\n\n')
+        return 0
+    elif lid_hex == '0x804':
+        print('当前的输入法是中文\n\n')
+        return 1
+    else:
+        print('当前的输入法既不是英文也不是中文\n\n')
+        return 0
 
+
+def change_language(language="EN"):
+    """
+    切换语言
+    :param language: EN––English; ZH––Chinese
+    :return: bool
+    """
+    LANGUAGE = {
+        "CH": 0x0804,
+        "EN": 0x0409
+    }
+    """
+    获取键盘布局
+    im_list = win32api.GetKeyboardLayoutList()
+    im_list = list(map(hex, im_list))
+    print(im_list)
+    """
+    hwnd = win32gui.GetForegroundWindow()
+    language = LANGUAGE.get(language)
+    result = win32api.SendMessage(
+        hwnd,
+        WM_INPUTLANGCHANGEREQUEST,
+        0,
+        language
+    )
+    return result == 0
 
 # 配置日志
 logging.basicConfig(
@@ -60,11 +62,9 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-#DeepSeek API 配置
-#替换为实际API密钥
-DEEPSEEK_API_KEY = "sk-f184e296fd3a485181874f0613fd5d44"
 
-if(os.path.exists("cache.txt")):
+
+if os.path.exists("cache.txt"):
     with open("cache.txt", "r", encoding="utf-8") as f:
         caches = f.read()
         DEEPSEEK_API_KEY = caches.strip()
@@ -73,28 +73,28 @@ else:
     with open("cache.txt", "w", encoding="utf-8") as f:
         f.write(DEEPSEEK_API_KEY)
 
-
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 
 class EducoderAssistant:
     def __init__(self):
-        self.client = OpenAI(
+        self.client = AsyncOpenAI(
             api_key=DEEPSEEK_API_KEY,
             base_url=DEEPSEEK_BASE_URL
         )
         self.last_question = None
-        
+        self.is_first_chunk = True  #标记是否是第一个代码块
+
     async def get_code_solution(self, question_text):
         """
-        使用DeepSeek API获取代码解决方案
+        使用DeepSeek API获取代码解决方案（流式输出）
+        返回异步生成器，逐步产生代码片段
         """
         try:
             logger.info("向DeepSeek发送请求获取代码解决方案...")
             
-            # 构建提示词，要求只返回代码
+
             prompt = f"""
 请根据以下编程题目要求，只提供完整的代码解决方案，不要包含任何解释、注释或其他文本。
-
 题目内容：
 {question_text}
 
@@ -104,40 +104,69 @@ class EducoderAssistant:
 3. 使用标准库和常见的编程实践
 4. 所有的代码都是C语言
 
-
-
 请直接返回代码：
 """
             
-            response = self.client.chat.completions.create(
+            #等待异步调用完成
+            response = await self.client.chat.completions.create(
                 model="deepseek-coder",
                 messages=[
                     {
                         "role": "system", 
-                        "content": "你是一个专业的编程助手，只返回代码，不包含任何解释或注释。"
+                        "content": "你是一个专业的编程助手，只返回代码，不包含任何解释或注释。尤其注意代码前一定不要有```c的标记，代码最后也不要有```的标记。不要return 0这一行。"
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                max_tokens=2000,
+                max_tokens=8192,
                 temperature=0.3,
-                stream=False
+                stream=True
             )
             
-            code_solution = response.choices[0].message.content.strip()
-            logger.info(f"成功获取代码解决方案，长度: {len(code_solution)} 字符")
+            # 初始化
+            full_code = ""
+            self.is_first_chunk = True
             
-            # 清理响应，确保只包含代码
-            code_solution = self.clean_code_response(code_solution)
+            #流式，使用yield逐步返回代码
+            async for chunk in response:
+                if chunk.choices and chunk.choices[0].delta.content is not None:
+                    content = chunk.choices[0].delta.content
+                    full_code += content
+                    
+                    #实时输出代码片段
+                    #print(content, end="", flush=True)
+                    
+                    #逐步返回代码片段
+                    yield {
+                        "type": "code_chunk",
+                        "chunk": content,
+                        "is_complete": False
+                    }
             
-            return code_solution
+            logger.info(f"代码解决方案流式传输完成，总长度: {len(full_code)} 字符")
             
+            #清理响应，确保只包含代码（好像并没有用）
+            cleaned_code = self.clean_code_response(full_code)
+            
+            # 返回完整的清理后的代码
+            
+            yield {
+                "type": "code_complete",
+                "full_code": cleaned_code,
+                "is_complete": True
+            }
+            
+
         except Exception as e:
             logger.error(f"获取DeepSeek响应失败: {e}")
-            return None
-    
+            yield {
+                "type": "error",
+                "message": f"获取代码解决方案失败: {str(e)}",
+                "is_complete": True
+            }
+
     def clean_code_response(self, response):
         """
         清理API响应，确保只包含代码
@@ -162,70 +191,69 @@ class EducoderAssistant:
         # 如果清理后为空，返回原始响应
         return cleaned_response if cleaned_response else response
     
-    def simulate_typing(self, text, typing_speed=0.1, enter_delay=1.0):
+    def simulate_typing_chunk(self, text, is_first_chunk=False):
         """
-        模拟键盘输入文本
+        模拟键盘输入文本片段
         """
-        left_kuohao = text.count('{')
         try:
-            logger.info(f"开始模拟键盘输入，文本长度: {len(text)} 字符")
+            if is_first_chunk:
+                logger.info("开始模拟键盘输入代码...")
+                
+                #确保焦点在输入区域
+                screen_width, screen_height = pyautogui.size()
+                print(f"屏幕宽度: {screen_width}, 屏幕高度: {screen_height}")
+                xzuobiao=screen_width/2
+                yzuobiao=screen_height/2
+                pyautogui.click(x=xzuobiao, y=yzuobiao)
+
+                time.sleep(0.1)
+                pyautogui.hotkey('ctrl', 'a')
+                time.sleep(0.1)
+                pyautogui.hotkey('delete')
+                time.sleep(0.5)
+                
+               
+            # 输入当前代码片段
+            if text.strip():
+                pyautogui.write(text, interval=0.1)
+                
+            return True
             
-            # 确保焦点在输入区域（可能需要根据实际情况调整延迟）
-            time.sleep(2)
-            time.sleep(0.1)
-            pyautogui.hotkey('ctrl', 'a')
-            time.sleep(0.1)
-            pyautogui.hotkey('delete')
-            time.sleep(0.5)
-            #切换至英文输入法
-            switcher = InputMethodSwitcher()
-
-            # 获取当前输入法
-            current = switcher.get_current_input_method()
-            print(f"当前输入法: {hex(current)}")
-
-            # 列出所有输入法
-            methods = switcher.list_available_input_methods()
-            for method in methods:
-               status = "英文" if method['is_english'] else "其他"
-               print(f"输入法: {hex(method['handle'])} - {status}")
-
-            # 切换到英文
-            if switcher.switch_to_english():
-                print("成功切换到英文输入法")
-            else:
-              print("切换英文输入法失败")
-
-            # 分段输入，避免一次性输入过长文本
-            lines = text.split('\n')
-            for i, line in enumerate(lines):
-                if line.strip():  # 跳过空行
-                    # 输入当前行
-                    pyautogui.write(line, interval=typing_speed)
-                
-                # 如果不是最后一行，按回车
-                if i < len(lines) - 1:
-                    time.sleep(0.1)
-                    pyautogui.press('enter')
-                    time.sleep(0.05)
-                
+        except Exception as e:
+            logger.error(f"模拟键盘输入失败: {e}")
+            return False
+    
+    def finalize_code_formatting(self, full_code):
+        """
+        完成代码输入后的格式化操作
+        """
+        try:
+            left_kuohao = full_code.count('{')
+            
+            # 执行代码格式化
             time.sleep(0.1)
             pyautogui.hotkey('alt', 'shift', 'f')
             pyautogui.keyDown('down')
             time.sleep(1)
             pyautogui.keyUp('down')
 
-            pyautogui.press('down',presses=left_kuohao)
+            # 处理多余的大括号
+            #pyautogui.press('down', presses=left_kuohao)
+            pyautogui.press('end')
             for i in range(left_kuohao):
                 time.sleep(0.1)
-                pyautogui.press('backspace')
-                time.sleep(0.1)
-                pyautogui.press('backspace')
-            logger.info("键盘输入完成")
+                #pyautogui.press('backspace')
+                #time.sleep(0.1)
+                #pyautogui.press('backspace')
+                pyautogui.hotkey('ctrl','shift','k')
+                pyautogui.press('left')
+
+            logger.info("代码格式化完成")
+            pyautogui.alert(text='代码输入已完成', title='提示', button='我知道了')
             return True
             
         except Exception as e:
-            logger.error(f"模拟键盘输入失败: {e}")
+            logger.error(f"代码格式化失败: {e}")
             return False
 
 async def server(websocket):
@@ -255,38 +283,50 @@ async def server(websocket):
                                 
                                 # 发送确认消息
                                 await websocket.send("已收到题目内容，正在向DeepSeek请求代码解决方案...")
+                                await websocket.send("开始实时输入代码到编辑器...")
                                 
-                                # 获取代码解决方案
-                                code_solution = await assistant.get_code_solution(question_text)
+                                 # 检查并切换输入法
+                                ret = get_language()
+                                print(ret)
+                                if ret == 1:
+                                    pyautogui.hotkey('ctrl', 'space')
+                                    time.sleep(0.5)
+
+                                # 获取代码解决方案（流式）并实时输入
+                                full_code = ""
+                                async for code_response in assistant.get_code_solution(question_text):
+                                    # 发送每个代码片段到客户端
+                                    await websocket.send(json.dumps(code_response, ensure_ascii=False))
+                                    
+                                    # 如果是代码片段，实时输入到编辑器
+                                    if code_response.get("type") == "code_chunk":
+                                        chunk = code_response.get("chunk", "")
+                                        full_code += chunk
+                                        
+                                        # 实时输入代码片段
+                                        input_success = assistant.simulate_typing_chunk(
+                                            chunk, 
+                                            is_first_chunk=assistant.is_first_chunk
+                                        )
+                                        assistant.is_first_chunk = False
+                                        
+                                        if not input_success:
+                                            await websocket.send("代码输入出现错误")
+                                    
+                                    elif code_response.get("type") == "code_complete":
+                                        full_code = code_response.get("full_code", full_code)
+                                        
+                                        # 完成代码格式化
+                                        format_success = assistant.finalize_code_formatting(full_code)
+                                        if format_success:
+                                            await websocket.send("✅ 代码已完成并自动格式化")
+                                        else:
+                                            await websocket.send("❌ 代码格式化失败")
                                 
-                                if code_solution:
-                                    # 发送代码到客户端
-                                    response_data = {
-                                        "type": "code_solution",
-                                        "code": code_solution,
-                                        "timestamp": time.time()
-                                    }
-                                    await websocket.send(json.dumps(response_data, ensure_ascii=False))
-                                    
-                                    # 询问是否要自动输入
-                                    await websocket.send("代码已生成，是否要自动输入到网页？(3秒后开始自动输入)")
-                                    
-                                    # 等待3秒后自动输入
-                                    await asyncio.sleep(3)
-                                    
-                                    # 模拟键盘输入
-                                    input_success = assistant.simulate_typing(code_solution)
-                                    
-                                    if input_success:
-                                        await websocket.send("✅ 代码已自动输入到网页")
-                                    else:
-                                        await websocket.send("❌ 自动输入失败，请手动复制代码")
-                                    
-                                else:
-                                    await websocket.send("❌ 无法获取代码解决方案，请重试")
+                                logger.info("代码生成和输入流程完成")
                                     
                             else:
-                                await websocket.send("❌ 未找到有效的题目内容")
+                                await websocket.send("未找到有效的题目内容")
                                 
                         else:
                             # 普通文本消息
@@ -328,16 +368,6 @@ async def main():
     )
     
     async with server_config:
-        logger.info("🎯 Educoder助手服务器启动在 localhost:8000")
-        logger.info("📝 服务功能:")
-        logger.info("  - 接收Educoder题目内容")
-        logger.info("  - 使用DeepSeek生成代码解决方案")
-        logger.info("  - 自动模拟键盘输入代码到网页")
-        logger.info("⚠️  请确保:")
-        logger.info("  - 已安装pyautogui: pip install pyautogui")
-        logger.info("  - 已设置正确的DeepSeek API密钥")
-        logger.info("  - 浏览器输入框已获得焦点")
-        
         await asyncio.Future()  # 永久运行
 
 if __name__ == "__main__":
