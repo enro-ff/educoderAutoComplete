@@ -30,31 +30,6 @@ def get_language():
         return 0
 
 
-def change_language(language="EN"):
-    """
-    切换语言
-    :param language: EN––English; ZH––Chinese
-    :return: bool
-    """
-    LANGUAGE = {
-        "CH": 0x0804,
-        "EN": 0x0409
-    }
-    """
-    获取键盘布局
-    im_list = win32api.GetKeyboardLayoutList()
-    im_list = list(map(hex, im_list))
-    print(im_list)
-    """
-    hwnd = win32gui.GetForegroundWindow()
-    language = LANGUAGE.get(language)
-    result = win32api.SendMessage(
-        hwnd,
-        WM_INPUTLANGCHANGEREQUEST,
-        0,
-        language
-    )
-    return result == 0
 
 # 配置日志
 logging.basicConfig(
@@ -147,7 +122,7 @@ class EducoderAssistant:
             
             logger.info(f"代码解决方案流式传输完成，总长度: {len(full_code)} 字符")
             
-            #清理响应，确保只包含代码（好像并没有用）
+            # 清理响应，确保只包含代码（好像并没有用）
             cleaned_code = self.clean_code_response(full_code)
             
             # 返回完整的清理后的代码
