@@ -10,6 +10,7 @@ import win32api
 import win32gui
 from win32con import WM_INPUTLANGCHANGEREQUEST
 
+
 # 输入法相关函数
 def get_language():
     """获取当前输入法状态"""
@@ -260,12 +261,29 @@ async def server(websocket):
                                 await websocket.send("已收到题目内容，正在向DeepSeek请求代码解决方案...")
                                 await websocket.send("开始实时输入代码到编辑器...")
                                 
-                                 # 检查并切换输入法
-                                ret = get_language()
-                                print(ret)
-                                if ret == 1:
-                                    pyautogui.hotkey('ctrl', 'space')
+                                # 检查并切换输入法  
+                                current_dir = os.path.dirname(os.path.abspath(__file__))
+                                image1_path = os.path.join(current_dir, 'chinese.png')
+                                image2_path = os.path.join(current_dir, 'english.png')
+                                try:
+                                    x, y = pyautogui.locateCenterOnScreen(image1_path, confidence=0.5)
+                                    pyautogui.hotkey('ctrl','space')
                                     time.sleep(0.5)
+                                    print("搜狗输入法，中文状态")
+                                except pyautogui.ImageNotFoundException:
+                                    try:
+                                        x2, y2 = pyautogui.locateCenterOnScreen(image2_path, confidence=0.5)
+                                        print("搜狗输入法，英文状态")
+                                    except pyautogui.ImageNotFoundException:
+                                        ret = get_language()
+                                        if ret == 1:
+                                          pyautogui.hotkey('ctrl', 'space')
+                                          time.sleep(0.5)
+                                    except Exception as e:
+                                        print(f"获取输入法状态错误：{e}")
+                                except Exception as e:
+                                    print(f"获取输入法状态错误：{e}")
+                       
 
                                 # 获取代码解决方案（流式）并实时输入
                                 full_code = ""
