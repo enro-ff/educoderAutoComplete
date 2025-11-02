@@ -6,15 +6,19 @@ class EducoderFloatingAssistant {
         this.generatedCode = null;
         this.dragging = false;
         this.dragOffset = { x: 0, y: 0 };
-        
+        this.autoConnectAttempted = false; // 新增：标记是否已尝试自动连接
+
         this.init();
     }
 
-    init() {
+    async init() { // 改为异步方法
         this.createFloatingWindow();
         this.attachEventListeners();
-        this.loadSettings();
+        await this.loadSettings(); // 等待设置加载完成
         this.extractPageContent();
+
+        // 新增：自动连接服务器
+        await this.autoConnect();
     }
 
     createFloatingWindow() {
@@ -22,16 +26,20 @@ class EducoderFloatingAssistant {
         this.container = document.createElement('div');
         this.container.id = 'educoder-assistant-floating';
         this.container.className = 'educoder-assistant';
-        
+
         this.container.innerHTML = `
             <div class="ea-header">
                 <div class="ea-title">
-                    <span class="ea-icon">🤖</span>
-                    <span>Educoder 助手</span>
+                    <span class="ea-icon"></span>
+                    <span>Educoder 助手 
+                    <br>
+                    <span class = 'fast-show'>(显示/隐藏快捷键Ctrl+shift+E)</span>
+                    </span>
+                    
                 </div>
                 <div class="ea-controls">
-                    <button class="ea-btn ea-minimize" title="最小化">−</button>
-                    <button class="ea-btn ea-close" title="关闭">×</button>
+                    <button class="ea-btn" id = "minimizeBtn" title="最小化">−</button>
+                    <button class="ea-btn" id = "closeBtn" title="关闭">×</button>
                 </div>
             </div>
             
@@ -64,13 +72,13 @@ class EducoderFloatingAssistant {
 
                 <!-- 内容操作 -->
                 <div class="ea-section">
-                    <h4>📄 题目处理</h4>
+                    <h4>题目处理</h4>
                     <div class="ea-button-group">
                         <button id="eaGetContentBtn" class="ea-btn ea-primary" disabled>
-                            🎯 获取题目
+                            获取题目并开始输入
                         </button>
                         <button id="eaAutoInputBtn" class="ea-btn ea-success" disabled>
-                            ⌨️ 准备输入
+                            准备输入
                         </button>
                     </div>
                     
@@ -84,7 +92,8 @@ class EducoderFloatingAssistant {
                                 <div class="ea-placeholder">点击"获取题目"加载内容...</div>
                             </div>
                         </div>
-                        
+
+                        <!--
                         <div class="ea-preview">
                             <div class="ea-preview-header">
                                 <span>生成代码</span>
@@ -94,6 +103,7 @@ class EducoderFloatingAssistant {
                                 <div class="ea-placeholder">代码生成后将显示在这里...</div>
                             </div>
                         </div>
+                       -->
                     </div>
                 </div>
 
@@ -108,17 +118,11 @@ class EducoderFloatingAssistant {
                     </div>
                 </div>
             </div>
-            
-            <div class="ea-minimized">
-                <span class="ea-icon">🤖</span>
-                <span>Educoder助手</span>
-                <button class="ea-btn ea-restore" title="恢复">↗</button>
-            </div>
         `;
 
         document.body.appendChild(this.container);
         this.initializeElements();
-        
+
         // 显示窗口
         this.show();
     }
@@ -128,78 +132,91 @@ class EducoderFloatingAssistant {
         this.serverUrlInput = document.getElementById('eaServerUrl');
         this.connectBtn = document.getElementById('eaConnectBtn');
         this.disconnectBtn = document.getElementById('eaDisconnectBtn');
-        
+        this.header = this.container.querySelector('.ea-header');
+
         // 功能按钮
         this.getContentBtn = document.getElementById('eaGetContentBtn');
         this.autoInputBtn = document.getElementById('eaAutoInputBtn');
         this.clearLogsBtn = document.getElementById('eaClearLogsBtn');
-        
+
         // 预览区域
         this.contentPreview = document.getElementById('eaContentPreview');
         this.codePreview = document.getElementById('eaCodePreview');
         this.contentCount = document.getElementById('eaContentCount');
         this.codeCount = document.getElementById('eaCodeCount');
-        
+
         // 状态显示
         this.serverStatus = document.getElementById('eaServerStatus');
         this.pageStatus = document.getElementById('eaPageStatus');
         this.statusIndicator = document.getElementById('eaStatusIndicator');
-        
+
         // 日志容器
         this.messagesContainer = document.getElementById('eaMessagesContainer');
-        
+
         // 控制按钮
-        this.minimizeBtn = this.container.querySelector('.ea-minimize');
-        this.closeBtn = this.container.querySelector('.ea-close');
-        this.restoreBtn = this.container.querySelector('.ea-restore');
+        this.minimizeBtn = this.container.querySelector('#minimizeBtn');
+        this.closeBtn = this.container.querySelector('#closeBtn');
     }
 
     attachEventListeners() {
-        // 连接按钮事件
-        this.connectBtn.addEventListener('click', () => this.connect());
+        // 连接按钮事件 - 修改为重新连接功能
+        this.connectBtn.addEventListener('click', () => {
+            this.showMessage('正在手动连接服务器...', 'system');
+            this.connect();
+        });
         this.disconnectBtn.addEventListener('click', () => this.disconnect());
-        
+
         // 功能按钮事件
         this.getContentBtn.addEventListener('click', () => this.getEducoderContent());
         this.autoInputBtn.addEventListener('click', () => this.prepareAutoInput());
         this.clearLogsBtn.addEventListener('click', () => this.clearLogs());
-        
+
         // 控制按钮事件
-        this.minimizeBtn.addEventListener('click', () => this.minimize());
+        this.minimizeBtn.addEventListener('click', () => {
+            if (this.isMinimized) {
+                this.restore();
+            } else {
+                this.minimize();
+            }
+        });
         this.closeBtn.addEventListener('click', () => this.hide());
-        this.restoreBtn.addEventListener('click', () => this.restore());
-        
-        // 输入框事件
-        this.serverUrlInput.addEventListener('change', () => this.saveSettings());
-        
+
+        // 输入框事件 - 修改为实时保存并尝试重新连接
+        this.serverUrlInput.addEventListener('change', () => {
+            this.saveSettings();
+            // 如果当前已连接，使用新地址重新连接
+            if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+                this.showMessage('服务器地址已更新，正在重新连接...', 'system');
+                setTimeout(() => this.connect(), 500);
+            }
+        });
+
         // 拖拽功能
         this.attachDragEvents();
     }
 
     attachDragEvents() {
-        const header = this.container.querySelector('.ea-header');
-        
-        header.addEventListener('mousedown', (e) => {
+        this.header.addEventListener('mousedown', (e) => {
             if (e.target.closest('.ea-controls')) return;
-            
+
             this.dragging = true;
             const rect = this.container.getBoundingClientRect();
             this.dragOffset.x = e.clientX - rect.left;
             this.dragOffset.y = e.clientY - rect.top;
-            
+
             e.preventDefault();
         });
 
         document.addEventListener('mousemove', (e) => {
             if (!this.dragging) return;
-            
+
             const x = e.clientX - this.dragOffset.x;
             const y = e.clientY - this.dragOffset.y;
-            
+
             // 限制在窗口范围内
             const maxX = window.innerWidth - this.container.offsetWidth;
             const maxY = window.innerHeight - this.container.offsetHeight;
-            
+
             this.container.style.left = Math.max(0, Math.min(x, maxX)) + 'px';
             this.container.style.top = Math.max(0, Math.min(y, maxY)) + 'px';
         });
@@ -212,15 +229,17 @@ class EducoderFloatingAssistant {
     async loadSettings() {
         try {
             const result = await chrome.storage.local.get(['serverUrl', 'windowPosition']);
-            if (result.serverUrl) {
+            if (result.serverUrl && this.serverUrlInput) {
                 this.serverUrlInput.value = result.serverUrl;
             }
-            if (result.windowPosition) {
+            if (result.windowPosition && this.container) {
                 this.container.style.left = result.windowPosition.x + 'px';
                 this.container.style.top = result.windowPosition.y + 'px';
             }
+            return result; // 返回设置结果
         } catch (error) {
             this.showMessage(`加载设置失败: ${error.message}`, 'error');
+            return {};
         }
     }
 
@@ -232,57 +251,110 @@ class EducoderFloatingAssistant {
         });
     }
 
+    // 新增：自动连接方法
+    async autoConnect() {
+        const url = this.serverUrlInput.value.trim();
+
+        if (!url) {
+            this.showMessage('未配置服务器地址，请手动连接', 'system');
+            return;
+        }
+
+        if (this.autoConnectAttempted) {
+            return; // 防止重复尝试
+        }
+
+        this.autoConnectAttempted = true;
+        this.showMessage('正在自动连接服务器...', 'system');
+
+        try {
+            await this.connectWebSocket(url);
+        } catch (error) {
+            this.showMessage(`自动连接失败: ${error.message}`, 'error');
+            this.updateConnectionState('CLOSED');
+        }
+    }
+
+    // 新增：WebSocket连接封装方法
+    connectWebSocket(url) {
+        return new Promise((resolve, reject) => {
+            if (!url) {
+                reject(new Error('服务器地址为空'));
+                return;
+            }
+
+            try {
+                this.socket = new WebSocket(url);
+                this.updateConnectionState('CONNECTING');
+
+                this.socket.onopen = (event) => {
+                    this.updateConnectionState('OPEN');
+                    this.showMessage('✅ 连接服务器成功', 'system');
+                    resolve(event);
+                };
+
+                this.socket.onmessage = (event) => {
+                    this.handleServerMessage(event.data);
+                };
+
+                this.socket.onerror = (error) => {
+                    this.updateConnectionState('CLOSED');
+                    this.showMessage('❌ 连接错误', 'error');
+                    reject(error);
+                };
+
+                this.socket.onclose = (event) => {
+                    this.updateConnectionState('CLOSED');
+                    const reason = event.code === 1000 ? '正常关闭' : `异常关闭 (代码: ${event.code})`;
+                    this.showMessage(`连接关闭: ${reason}`, 'system');
+
+                    // 如果不是正常关闭且不是第一次连接失败，可以尝试重连
+                    if (event.code !== 1000 && this.autoConnectAttempted) {
+                        setTimeout(() => {
+                            this.showMessage('尝试重新连接...', 'system');
+                            this.autoConnect();
+                        }, 3000);
+                    }
+                };
+
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
+
+    // 修改原有的 connect 方法
     connect() {
         const url = this.serverUrlInput.value.trim();
-        
+
         if (!url) {
             this.showMessage('请输入服务器地址', 'error');
             return;
         }
 
-        try {
-            this.socket = new WebSocket(url);
-            this.updateConnectionState('CONNECTING');
-            
-            this.socket.onopen = (event) => {
-                this.updateConnectionState('OPEN');
-                this.showMessage('✅ 连接服务器成功', 'system');
-            };
-            
-            this.socket.onmessage = (event) => {
-                this.handleServerMessage(event.data);
-            };
-            
-            this.socket.onerror = (error) => {
-                this.updateConnectionState('CLOSED');
-                this.showMessage('❌ 连接错误', 'error');
-            };
-            
-            this.socket.onclose = (event) => {
-                this.updateConnectionState('CLOSED');
-                const reason = event.code === 1000 ? '正常关闭' : `异常关闭 (代码: ${event.code})`;
-                this.showMessage(`连接关闭: ${reason}`, 'system');
-            };
-            
-        } catch (error) {
-            this.showMessage(`连接失败: ${error.message}`, 'error');
-            this.updateConnectionState('CLOSED');
+        // 如果已有连接，先关闭
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.close(1000, '重新连接');
         }
+
+        this.connectWebSocket(url).catch(error => {
+            this.showMessage(`手动连接失败: ${error.message}`, 'error');
+        });
     }
 
     handleServerMessage(message) {
         try {
             const data = JSON.parse(message);
-            
+
             if (data.type === 'code_solution') {
                 this.handleCodeSolution(data);
             } else {
                 this.showMessage(`服务器: ${JSON.stringify(data)}`, 'received');
             }
-            
+
         } catch (e) {
             this.showMessage(`服务器: ${message}`, 'received');
-            
+
             if (message.includes('代码已生成') || message.includes('自动输入')) {
                 this.pageStatus.textContent = '代码就绪';
                 this.pageStatus.style.color = '#28a745';
@@ -298,10 +370,14 @@ class EducoderFloatingAssistant {
     }
 
     disconnect() {
-        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.close(1000, '用户主动断开');
+        if (this.socket) {
+            if (this.socket.readyState === WebSocket.OPEN) {
+                this.socket.close(1000, '用户主动断开');
+            }
+            this.socket = null;
         }
         this.updateConnectionState('CLOSED');
+        this.showMessage('已断开服务器连接', 'system');
     }
 
     async getEducoderContent() {
@@ -312,9 +388,9 @@ class EducoderFloatingAssistant {
 
         try {
             this.showMessage('正在获取题目内容...', 'system');
-            
+
             const content = this.extractPageContent();
-                
+
             if (content.text) {
                 this.showContentPreview(content);
                 this.sendContentToServer(content);
@@ -322,7 +398,7 @@ class EducoderFloatingAssistant {
                 this.showMessage('未找到题目内容', 'error');
                 this.clearContentPreview();
             }
-            
+
         } catch (error) {
             this.showMessage(`获取内容失败: ${error.message}`, 'error');
             console.error('获取内容错误:', error);
@@ -339,10 +415,10 @@ class EducoderFloatingAssistant {
             '.problem-description',
             '.shixun-content'
         ];
-        
+
         let elements = [];
         let allText = '';
-        
+
         for (const selector of targetSelectors) {
             const foundElements = document.querySelectorAll(selector);
             if (foundElements.length > 0) {
@@ -350,23 +426,23 @@ class EducoderFloatingAssistant {
                 break;
             }
         }
-        
+
         if (elements.length === 0) {
             const possibleElements = document.querySelectorAll('div, section, article');
             elements = Array.from(possibleElements).filter(el => {
                 const text = el.textContent || '';
-                const hasContent = text.length > 200 && 
-                                 (text.includes('题目') || 
-                                  text.includes('要求') || 
-                                  text.includes('编程') ||
-                                  text.includes('代码') ||
-                                  text.includes('function') ||
-                                  text.includes('def ') ||
-                                  text.includes('public'));
+                const hasContent = text.length > 200 &&
+                    (text.includes('题目') ||
+                        text.includes('要求') ||
+                        text.includes('编程') ||
+                        text.includes('代码') ||
+                        text.includes('function') ||
+                        text.includes('def ') ||
+                        text.includes('public'));
                 return hasContent;
             });
         }
-        
+
         if (elements.length > 0) {
             allText = elements.map(el => {
                 let text = el.textContent || '';
@@ -374,7 +450,7 @@ class EducoderFloatingAssistant {
                 return text;
             }).join('\n\n');
         }
-        
+
         return {
             elements: elements.map(el => ({
                 tagName: el.tagName,
@@ -395,10 +471,10 @@ class EducoderFloatingAssistant {
                 url: window.location.href,
                 content: content
             };
-            
+
             this.socket.send(JSON.stringify(messageData, null, 2));
-            this.showMessage('📤 题目内容已发送到服务器', 'sent');
-            
+            this.showMessage('题目内容已发送到服务器', 'sent');
+
         } catch (error) {
             this.showMessage(`发送失败: ${error.message}`, 'error');
         }
@@ -410,8 +486,8 @@ class EducoderFloatingAssistant {
             return;
         }
 
-        this.showMessage('⌨️ 请点击网页中的代码输入框，然后等待3秒后开始自动输入...', 'system');
-        
+        this.showMessage('请点击网页中的代码输入框，然后开始自动输入...', 'system');
+
         if (this.socket && this.socket.readyState === WebSocket.OPEN) {
             this.socket.send(JSON.stringify({
                 type: 'ready_for_input',
@@ -423,7 +499,7 @@ class EducoderFloatingAssistant {
     showContentPreview(content) {
         const charCount = content.text.length;
         const lineCount = content.text.split('\n').length;
-        
+
         this.contentPreview.innerHTML = `
             <div class="ea-preview-meta">${content.elements.length}个元素, ${charCount}字符, ${lineCount}行</div>
             <div class="ea-preview-text">${this.escapeHtml(content.text.substring(0, 300))}${charCount > 300 ? '...' : ''}</div>
@@ -434,7 +510,7 @@ class EducoderFloatingAssistant {
     showCodePreview(code) {
         const charCount = code.length;
         const lineCount = code.split('\n').length;
-        
+
         this.codePreview.innerHTML = `
             <div class="ea-preview-meta">${lineCount}行代码, ${charCount}字符</div>
             <div class="ea-preview-text">${this.escapeHtml(code.substring(0, 500))}${charCount > 500 ? '...' : ''}</div>
@@ -460,14 +536,19 @@ class EducoderFloatingAssistant {
         };
 
         this.serverStatus.textContent = stateTexts[state] || state;
-        
+
         this.statusIndicator.className = 'ea-status-indicator';
         if (state === 'OPEN') {
             this.statusIndicator.classList.add('ea-connected');
+            this.connectBtn.textContent = '已连接';
         } else if (state === 'CONNECTING') {
             this.statusIndicator.classList.add('ea-connecting');
+            this.connectBtn.textContent = '连接中...';
+        } else {
+            this.statusIndicator.classList.add('ea-disconnected');
+            this.connectBtn.textContent = '连接';
         }
-        
+
         const isConnected = state === 'OPEN';
         this.connectBtn.disabled = isConnected;
         this.disconnectBtn.disabled = !isConnected;
@@ -477,18 +558,18 @@ class EducoderFloatingAssistant {
     showMessage(text, type = 'system') {
         const messageElement = document.createElement('div');
         messageElement.className = `ea-log-item ea-${type}`;
-        
+
         const timestamp = new Date().toLocaleTimeString();
         messageElement.innerHTML = `
             <div class="ea-log-time">[${timestamp}]</div>
             <div class="ea-log-text">${this.escapeHtml(text)}</div>
         `;
-        
+
         const placeholder = this.messagesContainer.querySelector('.ea-placeholder');
         if (placeholder) {
             placeholder.remove();
         }
-        
+
         this.messagesContainer.appendChild(messageElement);
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
     }
@@ -505,13 +586,23 @@ class EducoderFloatingAssistant {
     }
 
     minimize() {
+        this.container.style.resize = 'none'
         this.container.classList.add('ea-minimized-state');
         this.isMinimized = true;
+        this.minimizeBtn.setAttribute('title', '恢复');
+        this.minimizeBtn.textContent = '↗';
+        this.currentStyle = [this.container.style.width, this.container.style.height];
+        this.container.style.height = '52px';
+        console.log(this.header.style.height);
     }
 
     restore() {
+        this.container.style.resize = 'both'
         this.container.classList.remove('ea-minimized-state');
         this.isMinimized = false;
+        this.minimizeBtn.setAttribute('title', '最小化');
+        this.minimizeBtn.textContent = '-';
+        this.container.style.height = this.currentStyle[1];
     }
 
     escapeHtml(text) {
@@ -528,9 +619,9 @@ function initAssistant() {
     if (document.getElementById('educoder-assistant-floating')) {
         return; // 防止重复初始化
     }
-    
+
     assistant = new EducoderFloatingAssistant();
-    
+
     // 添加全局快捷键 (Ctrl+Shift+E)
     document.addEventListener('keydown', (e) => {
         if (e.ctrlKey && e.shiftKey && e.key === 'E') {
