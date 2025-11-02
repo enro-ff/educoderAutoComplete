@@ -57,10 +57,16 @@ class EducoderFloatingAssistant {
                     </div>
                 </div>
 
+                <!-- 提示内容 -->
+                <div class="ea-alert">重要提示：<br>
+                1. 请勿使用搜狗输入法等第三方输入法，这些输入法会在代码输入过程中自动切换中英文，使代码无法正确输入。请务必使用windows自带的微软拼音输入法。
+                <br>2. 代码输入过程中请勿切换界面。如需停止代码输入，请将鼠标快速移动至屏幕左上角。
+                </div>
+
                 <!-- 连接配置 -->
                 <div class="ea-section">
                     <div class="ea-input-group">
-                        <label for="eaServerUrl">服务器地址:</label>
+                        <label for="eaServerUrl">服务器地址：</label>
                         <input type="text" id="eaServerUrl" placeholder="ws://localhost:8000" 
                                class="ea-input">
                     </div>
@@ -89,7 +95,7 @@ class EducoderFloatingAssistant {
                                 <span class="ea-preview-count" id="eaContentCount">0 字符</span>
                             </div>
                             <div id="eaContentPreview" class="ea-preview-content">
-                                <div class="ea-placeholder">点击"获取题目"加载内容...</div>
+                                <div class="ea-placeholder">点击"获取题目并开始输入"后题目内容将显示在这里。</div>
                             </div>
                         </div>
 
@@ -221,9 +227,47 @@ class EducoderFloatingAssistant {
             this.container.style.top = Math.max(0, Math.min(y, maxY)) + 'px';
         });
 
-        document.addEventListener('mouseup', () => {
+        document.addEventListener('mouseup', (e) => {
+            if (!this.dragging) return;
+
             this.dragging = false;
+            this.autoSnapToEdge();
         });
+    }
+
+    // 自动贴边功能
+    autoSnapToEdge() {
+        const rect = this.container.getBoundingClientRect();
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const containerWidth = this.container.offsetWidth;
+        const containerHeight = this.container.offsetHeight;
+
+        // 计算窗口中心位置
+        const containerCenterX = rect.left + containerWidth / 2;
+        const screenCenterX = windowWidth / 2;
+
+        let newX = rect.left;
+        let newY = rect.top;
+
+        // 根据窗口中心与屏幕中心的相对位置决定贴左边还是右边
+        if (containerCenterX < screenCenterX) {
+            // 贴左边
+            newX = 0;
+        } else {
+            // 贴右边
+            newX = windowWidth - containerWidth;
+        }
+
+        // 限制垂直位置在窗口范围内
+        newY = Math.max(0, Math.min(newY, windowHeight - containerHeight));
+
+        // 应用新位置
+        this.container.style.left = newX + 'px';
+        this.container.style.top = newY + 'px';
+
+        // 保存位置设置
+        this.saveSettings();
     }
 
     async loadSettings() {
@@ -235,6 +279,9 @@ class EducoderFloatingAssistant {
             if (result.windowPosition && this.container) {
                 this.container.style.left = result.windowPosition.x + 'px';
                 this.container.style.top = result.windowPosition.y + 'px';
+
+                // 加载设置后也进行自动贴边
+                setTimeout(() => this.autoSnapToEdge(), 100);
             }
             return result; // 返回设置结果
         } catch (error) {
@@ -578,6 +625,9 @@ class EducoderFloatingAssistant {
         this.container.classList.add('ea-visible');
         this.isVisible = true;
         this.isMinimized = false;
+
+        // 显示时也进行自动贴边
+        setTimeout(() => this.autoSnapToEdge(), 100);
     }
 
     hide() {
