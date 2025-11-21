@@ -207,22 +207,19 @@ class EducoderAssistant:
             left_kuohao = full_code.count('{')
             
             # 执行代码格式化
-            time.sleep(0.1)
+            time.sleep(0.5)
             pyautogui.hotkey('alt', 'shift', 'f')
-            pyautogui.keyDown('down')
-            time.sleep(1)
-            pyautogui.keyUp('down')
 
             # 处理多余的大括号
-            #pyautogui.press('down', presses=left_kuohao)
-            pyautogui.press('end')
+            pyautogui.press('down', presses=left_kuohao)
             for i in range(left_kuohao):
                 time.sleep(0.1)
-                #pyautogui.press('backspace')
-                #time.sleep(0.1)
-                #pyautogui.press('backspace')
-                pyautogui.hotkey('ctrl','shift','k')
-                pyautogui.press('left')
+                pyautogui.press('backspace')
+                time.sleep(0.1)
+                pyautogui.press('backspace')
+            
+            pyautogui.hotkey('alt', 'shift', 'f')
+
 
             logger.info("代码格式化完成")
             pyautogui.alert(text='代码输入已完成', title='提示', button='我知道了')
